@@ -68,6 +68,9 @@ async function seed() {
     const codingClub = clubs.find(c => c.club_name === 'Coding Club');
     const culturalClub = clubs.find(c => c.club_name === 'CCB');
     const sportsClub = clubs.find(c => c.club_name === 'Sports Club');
+    const natyanandhana = clubs.find(c => c.club_name === 'Natyanandhana');
+    const ccbDanceCrew = clubs.find(c => c.club_name === 'CCB Dance Crew');
+    const eCell = clubs.find(c => c.club_name === 'E-Cell');
 
     // 4. Insert Club Members
     console.log('👥 Seeding Club Members...');
@@ -106,6 +109,33 @@ async function seed() {
       formatDate(event4Date), sportsClub.id, // $6, $7
       formatDate(event5Date) // $8
     ]);
+
+    // Insert Natyanandhana past event with poster
+    await pool.query(`
+      INSERT INTO events (title, description, date, time, venue, organizer_id, category, poster_url) VALUES 
+        ('Nritya (Classical) – Athenes 2K26',
+         'Natyanandhana proudly presented Dr. Sravya Manasa as the esteemed judge for the Nritya Classical dance competition at Athenes 2K26. An electrifying performance evening that celebrated the grace, tradition, and artistry of Indian classical dance forms at BVRIT.',
+         '2026-04-01', '17:00:00', 'Open Air Theatre, BVRIT', $1, 'Cultural',
+         '/events/natyanandhana-nritya-judge.png')
+    `, [natyanandhana.id]);
+
+    // Insert CCB Dance Crew past event with poster
+    await pool.query(`
+      INSERT INTO events (title, description, date, time, venue, organizer_id, category, poster_url) VALUES 
+        ('Nritya (Western) – Athenes 2K26',
+         'CCB Dance Crew proudly presented SREE as the electrifying judge for the Nritya Western dance competition at Athenes 2K26. A high-energy showdown of contemporary and western dance styles that set the stage on fire at BVRIT.',
+         '2026-04-01', '18:30:00', 'Open Air Theatre, BVRIT', $1, 'Cultural',
+         '/events/ccb-dance-crew-nritya-western-judge.png')
+    `, [ccbDanceCrew.id]);
+
+    // Insert E-Cell past event with poster
+    await pool.query(`
+      INSERT INTO events (title, description, date, time, venue, organizer_id, category, poster_url) VALUES 
+        ('E-Summit''26 – Summer Edition',
+         'E-Cell BVRIT hosted the electrifying E-Summit''26 Summer Edition on 25th–26th March, featuring Investment Arena, Brand Wars, Ad Arena, Pitch Perfect, Panel Discussion, and IPL Auction. Led by E-Cell leads Rishi Srii Reddy D and Satya Sai, the 2-day entrepreneurship extravaganza brought together innovators, investors, and future leaders at BVRIT.',
+         '2026-03-25', '09:00:00', 'BVRIT Campus, Narsapur', $1, 'Other',
+         '/events/ecell-esummit-2026.png')
+    `, [eCell.id]);
     
     const eventsList = eventsInserted.rows;
 
