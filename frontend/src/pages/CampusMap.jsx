@@ -9,7 +9,7 @@ import {
   X, ChevronRight, Building2, BedDouble, Trees,
   ParkingCircle, DoorOpen, Layers, Search, ArrowRight,
   CheckCircle, AlertCircle, Loader2, Route, Pencil, Eye,
-  BookOpen, Coffee, FlaskConical, Trophy, Briefcase
+  BookOpen, Coffee, FlaskConical, Trophy, Briefcase, Square
 } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -442,6 +442,13 @@ const CampusMap = () => {
   const [isSavingPath, setIsSavingPath] = useState(false);
   const [showPaths, setShowPaths]       = useState(true);
 
+  // Boundary drawing
+  const [boundaries, setBoundaries] = useState([]);
+  const [drawingBoundary, setDrawingBoundary] = useState(false);
+  const [boundaryPoints, setBoundaryPoints] = useState([]);
+  const [boundaryName, setBoundaryName] = useState('');
+  const [isSavingBoundary, setIsSavingBoundary] = useState(false);
+
   // ── Fetch data ─────────────────────────────────────────────────────────────
 
   const authHeader = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
@@ -460,7 +467,14 @@ const CampusMap = () => {
     } catch { setPaths([]); }
   }, [authHeader]);
 
-  useEffect(() => { fetchLocations(); fetchPaths(); }, [fetchLocations, fetchPaths]);
+  const fetchBoundaries = useCallback(async () => {
+    try {
+      const { data } = await axios.get('/api/boundaries', { headers: authHeader });
+      setBoundaries(data.data || []);
+    } catch { setBoundaries([]); }
+  }, [authHeader]);
+
+  useEffect(() => { fetchLocations(); fetchPaths(); fetchBoundaries(); }, [fetchLocations, fetchPaths, fetchBoundaries]);
 
   // Track GPS Location continuously
   useEffect(() => {
@@ -636,6 +650,43 @@ const CampusMap = () => {
   const pathsGeoJSON = useMemo(() => pathsToGeoJSON(paths), [paths]);
 
   // Drawing path preview GeoJSON
+
+  const boundariesGeoJSON = useMemo(() => {
+    return {
+      type: 'FeatureCollection',
+      features: boundaries.map(b => {
+        const coords = typeof b.coordinates === 'string' ? JSON.parse(b.coordinates) : b.coordinates;
+        // Maplibre Polygon strictly expects Array of Arrays of points [[lng, lat]] where first==last
+        const points = coords.map(c => [Number(c.lng), Number(c.lat)]);
+        if (points.length > 0 && (points[0][0] !== points[points.length-1][0] || points[0][1] !== points[points.length-1][1])) {
+          points.push([...points[0]]); // close loop
+        }
+        return {
+          type: 'Feature',
+          id: \oundary_\,
+          properties: { id: b.id, name: b.name, color: b.color },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [points]
+          }
+        };
+      })
+    };
+  }, [boundaries]);
+
+  const drawingBoundaryGeoJSON = useMemo(() => {
+    if (boundaryPoints.length < 2) return null;
+    const points = boundaryPoints.map(p => [p.lng, p.lat]);
+    if (boundaryPoints.length >= 3) points.push([boundaryPoints[0].lng, boundaryPoints[0].lat]); // Close polygon
+    return {
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature',
+        geometry: { type: boundaryPoints.length >= 3 ? 'Polygon' : 'LineString', coordinates: boundaryPoints.length >= 3 ? [points] : points }
+      }]
+    };
+  }, [boundaryPoints]);
+
   const drawingGeoJSON = useMemo(() => {
     if (pathPoints.length < 2) return null;
     return {
@@ -664,7 +715,7 @@ const CampusMap = () => {
 
   // ── Cursor ─────────────────────────────────────────────────────────────────
 
-  const mapCursor = drawingPath ? 'crosshair' : (activeTab === 'pins' && isAdmin ? 'crosshair' : 'grab');
+  const mapCursor = (drawingPath || drawingBoundary) ? 'crosshair' : ((activeTab === 'pins' || activeTab === 'boundary') && isAdmin ? 'crosshair' : 'grab');
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -936,6 +987,46 @@ const CampusMap = () => {
               )}
             </div>
           )}
+
+          {/* ── BOUNDARIES (admin) ── */}
+          {activeTab === 'boundary' && isAdmin && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-3 overflow-y-auto flex-1">
+              <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                <Square size={15} className="text-blue-500" /> Campus Boundaries
+              </h3>
+              {!drawingBoundary ? (
+                <button onClick={() => { setDrawingBoundary(true); setBoundaryPoints([]); }}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                  <Plus size={14} /> Draw New Boundary
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700 font-medium">
+                    🖱️ Click on the map to define polygon corners.
+                  </div>
+                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    value={boundaryName} onChange={e => setBoundaryName(e.target.value)} placeholder="Boundary Name" />
+                  <div className="flex gap-2">
+                    <button onClick={handleSaveBoundary} disabled={isSavingBoundary || boundaryPoints.length < 3 || !boundaryName.trim()}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg transition-colors">
+                      {isSavingBoundary ? 'Saving...' : 'Save Boundary'}
+                    </button>
+                    <button onClick={() => { setDrawingBoundary(false); setBoundaryPoints([]); }}
+                      className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                  </div>
+                </div>
+              )}
+              <div className="overflow-y-auto flex-1 space-y-2 mt-1">
+                {boundaries.map(b => (
+                  <div key={b.id} className="flex items-center gap-2 p-2 rounded-xl bg-blue-50 border border-blue-100">
+                    <Square size={13} className="text-blue-600 flex-shrink-0" />
+                    <div className="text-sm font-medium text-gray-800 truncate flex-1">{b.name}</div>
+                    <button onClick={() => handleDeleteBoundary(b.id)} className="p-1 rounded hover:bg-red-50 text-red-400"><Trash2 size={12} /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Map ──────────────────────────────────────────────────────── */}
@@ -950,6 +1041,11 @@ const CampusMap = () => {
           {drawingPath && (
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[500] bg-green-600 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
               <Pencil size={12} /> Drawing path — click along the road to add waypoints ({pathPoints.length} so far)
+            </div>
+          )}
+          {drawingBoundary && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[500] bg-blue-600 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+              <Square size={12} /> Drawing boundary — click to add corners ({boundaryPoints.length} so far)
             </div>
           )}
           {selectingFor && (
@@ -991,6 +1087,26 @@ const CampusMap = () => {
               </Source>
             )}
 
+            {/* Campus Boundaries */}
+            {boundariesGeoJSON && (
+              <Source id="boundaries-src" type="geojson" data={boundariesGeoJSON}>
+                <Layer id="boundaries-fill" source="boundaries-src" type="fill"
+                  paint={{ 'fill-color': ['get', 'color'], 'fill-opacity': 0.15 }} />
+                <Layer id="boundaries-line" source="boundaries-src" type="line"
+                  paint={{ 'line-color': ['get', 'color'], 'line-width': 2, 'line-opacity': 0.8 }} />
+              </Source>
+            )}
+
+            {/* Boundary drawing preview */}
+            {drawingBoundaryGeoJSON && (
+              <Source id="drawing-boundary" type="geojson" data={drawingBoundaryGeoJSON}>
+                <Layer id="drawing-boundary-fill" source="drawing-boundary" type="fill"
+                  paint={{ 'fill-color': '#3b82f6', 'fill-opacity': 0.2 }} />
+                <Layer id="drawing-boundary-line" source="drawing-boundary" type="line"
+                  paint={{ 'line-color': '#3b82f6', 'line-width': 3, 'line-opacity': 1, 'line-dasharray': [2, 1] }} />
+              </Source>
+            )}
+
             {/* Drawing preview */}
             {drawingGeoJSON && (
               <Source id="drawing" type="geojson" data={drawingGeoJSON}>
@@ -1004,6 +1120,13 @@ const CampusMap = () => {
             {pathPoints.map((pt, i) => (
               <Marker key={`dp-${i}`} longitude={pt.lng} latitude={pt.lat} anchor="center">
                 <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-white shadow-md" />
+              </Marker>
+            ))}
+
+            {/* Boundary waypoint dots */}
+            {drawingBoundary && boundaryPoints.map((pt, i) => (
+              <Marker key={`db-${i}`} longitude={pt.lng} latitude={pt.lat} anchor="center">
+                <div className="w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow-md" />
               </Marker>
             ))}
 

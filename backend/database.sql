@@ -1,0 +1,8 @@
+
+CREATE TABLE IF NOT EXISTS campus_boundaries (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL,
+    coordinates JSONB NOT NULL,
+    color VARCHAR(20) DEFAULT '#3b82f6',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
