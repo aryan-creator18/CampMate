@@ -559,6 +559,10 @@ const CampusMap = () => {
       setPathPoints(pts => [...pts, { lat, lng }]);
       return;
     }
+    if (drawingBoundary) {
+      setBoundaryPoints(pts => [...pts, { lat, lng }]);
+      return;
+    }
 
     if (activeTab === 'pins' && isAdmin) {
       if (editingLoc) return;
@@ -566,7 +570,7 @@ const CampusMap = () => {
       setShowPinForm(true);
       setEditingLoc(null);
     }
-  }, [drawingPath, activeTab, isAdmin, editingLoc]);
+  }, [drawingPath, drawingBoundary, activeTab, isAdmin, editingLoc]);
 
   // ── Pin CRUD ───────────────────────────────────────────────────────────────
 
@@ -627,6 +631,28 @@ const CampusMap = () => {
       await fetchPaths();
     } catch { flash('error', 'Failed to delete path.'); }
   };
+  const handleSaveBoundary = async () => {
+    if (boundaryPoints.length < 3) { flash('error', 'Add at least 3 points.'); return; }
+    if (!boundaryName.trim()) { flash('error', 'Enter a boundary name.'); return; }
+    setIsSavingBoundary(true);
+    try {
+      await axios.post('/api/boundaries', { name: boundaryName, coordinates: boundaryPoints }, { headers: authHeader });
+      flash('success', `Boundary "${boundaryName}" saved!`);
+      await fetchBoundaries();
+      setDrawingBoundary(false); setBoundaryPoints([]); setBoundaryName('');
+    } catch { flash('error', 'Failed to save boundary.'); }
+    finally { setIsSavingBoundary(false); }
+  };
+
+  const handleDeleteBoundary = async (id) => {
+    if (!window.confirm(`Delete this boundary?`)) return;
+    try {
+      await axios.delete(`/api/boundaries/${id}`, { headers: authHeader });
+      flash('success', 'Boundary deleted.');
+      await fetchBoundaries();
+    } catch { flash('error', 'Failed to delete boundary.'); }
+  };
+
 
   const flash = (type, text) => {
     setAdminMsg({ type, text });
@@ -663,7 +689,7 @@ const CampusMap = () => {
         }
         return {
           type: 'Feature',
-          id: \oundary_\,
+          id: `boundary_${b.id}`,
           properties: { id: b.id, name: b.name, color: b.color },
           geometry: {
             type: 'Polygon',
@@ -740,6 +766,10 @@ const CampusMap = () => {
               <button onClick={() => setActiveTab('paths')}
                 className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${activeTab === 'paths' ? 'bg-green-600 text-white shadow' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
                 <Route size={14} className="inline mr-1" /> Draw Paths
+              </button>
+              <button onClick={() => setActiveTab('boundary')}
+                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${activeTab === 'boundary' ? 'bg-blue-600 text-white shadow' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                <Square size={14} className="inline mr-1" /> Draw Boundaries
               </button>
             </>
           )}

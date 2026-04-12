@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { verifyToken, restrictTo } = require('../middleware/auth');
 
 // Get all boundaries
 router.get('/', async (req, res) => {
@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
 });
 
 // Admin: Save boundary
-router.post('/', requireAuth, requireRole('Administrator'), async (req, res) => {
+router.post('/', verifyToken, restrictTo('Administrator'), async (req, res) => {
   const { name, coordinates, color } = req.body;
   if (!name || !coordinates || coordinates.length < 3) {
     return res.status(400).json({ success: false, message: 'Invalid boundary data (requires name and at least 3 points)' });
@@ -34,7 +34,7 @@ router.post('/', requireAuth, requireRole('Administrator'), async (req, res) => 
 });
 
 // Admin: Delete boundary
-router.delete('/:id', requireAuth, requireRole('Administrator'), async (req, res) => {
+router.delete('/:id', verifyToken, restrictTo('Administrator'), async (req, res) => {
   try {
     const { id } = req.params;
     await db.query('DELETE FROM campus_boundaries WHERE id = $1', [id]);
